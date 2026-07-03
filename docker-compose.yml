@@ -1,1 +1,79 @@
+services:
+  redis-stack:
+    image: redis/redis-stack-server:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - inference-gateway
 
+  gateway:
+    build:
+      context: ./gateway
+    ports:
+      - "${GATEWAY_PORT:-8000}:8000"
+    environment:
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      REDIS_URL: "redis://redis-stack:6379"
+      TENANTS_CONFIG_PATH: "/app/config/tenants.yaml"
+      GATEWAY_PORT: "8000"
+      EMBEDDING_MODEL_NAME: "${EMBEDDING_MODEL_NAME:-all-MiniLM-L6-v2}"
+      THREAD_POOL_WORKERS: "${THREAD_POOL_WORKERS:-4}"
+    depends_on:
+      redis-stack:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json, urllib.request;
+          result = json.load(urllib.request.urlopen('http://localhost:8000/health'));
+          assert result['status'] == 'ok'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - inference-gateway
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      gateway:
+        condition: service_started
+    networks:
+      - inference-gateway
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./observability/grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - inference-gateway
+
+networks:
+  inference-gateway:
+    driver: bridge
+
+volumes:
+  redis-data:
+  grafana-data:
