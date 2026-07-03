@@ -1,0 +1,75 @@
+# ============================================================
+# SECRETS — NEVER COMMIT THESE UNDER ANY CIRCUMSTANCES
+# ============================================================
+.env
+.env.*
+*.env
+secrets/
+*_secret*
+openai_key*
+
+# ============================================================
+# PYTHON
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments — these are hundreds of MB, never committed
+venv/
+env/
+ENV/
+.venv/
+
+# ============================================================
+# SENTENCE-TRANSFORMERS MODEL CACHE
+# ============================================================
+# all-MiniLM-L6-v2 is ~90MB and downloads automatically at runtime.
+# Never commit it — it will permanently bloat your repository.
+.cache/
+models/
+sentence_transformers_cache/
+
+# ============================================================
+# TESTING AND COVERAGE
+# ============================================================
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# ============================================================
+# IDE FILES — VS Code workspace settings that are machine-specific
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ============================================================
+# DOCKER VOLUME DATA — never commit mounted data directories
+# ============================================================
+redis-data/
+grafana-data/
+prometheus-data/
+
+# ============================================================
+# LOGS
+# ============================================================
+*.log
+logs/
+
+# ============================================================
+# OS FILES
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
