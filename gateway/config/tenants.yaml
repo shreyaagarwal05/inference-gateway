@@ -1,1 +1,18 @@
+tenants:
+  tenant_a:
+    similarity_threshold: 0.95
+    ttl: 3600
+    model_version: "gpt-4"
+    failure_threshold: 5
+    window_seconds: 10
+    cooldown_seconds: 60
+    timeout_seconds: 10.0
 
+  tenant_b:
+    similarity_threshold: 0.90
+    ttl: 1800
+    model_version: "gpt-3.5-turbo"
+    failure_threshold: 5
+    window_seconds: 10
+    cooldown_seconds: 60
+    timeout_seconds: 10.0
