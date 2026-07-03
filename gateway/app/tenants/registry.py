@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger("uvicorn.error")
 DEFAULT_CONFIG_PATH = "/app/config/tenants.yaml"
 
 

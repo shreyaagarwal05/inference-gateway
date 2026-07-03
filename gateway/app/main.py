@@ -17,7 +17,7 @@ from .breaker.redis_client import (
 from .config import get_settings
 from .tenants.registry import load_tenant_registry
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = logging.getLogger("uvicorn.error")
 
 
 @asynccontextmanager
