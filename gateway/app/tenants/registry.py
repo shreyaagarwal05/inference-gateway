@@ -81,3 +81,8 @@ def load_tenant_registry(config_path: str | Path | None = None) -> None:
 def get_tenant_config(tenant_id: str) -> TenantConfig | None:
     """Return a tenant's startup-loaded configuration, if it exists."""
     return _tenant_registry.get(tenant_id)
+
+
+def get_tenant_ids() -> tuple[str, ...]:
+    """Return the tenant identifiers loaded during application startup."""
+    return tuple(_tenant_registry)
