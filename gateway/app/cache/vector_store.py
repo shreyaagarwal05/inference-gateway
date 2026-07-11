@@ -7,6 +7,7 @@ import time
 import uuid
 
 from redis.exceptions import ResponseError
+from redis.commands.search.query import Query
 
 from ..breaker.redis_client import (
     cache_key_prefix,
@@ -14,6 +15,7 @@ from ..breaker.redis_client import (
     cache_vec_key,
     get_redis_client,
     index_name,
+    meta_key_for_vec_key,
 )
 
 
@@ -80,3 +82,36 @@ async def write_cache_entry(
         },
     )
     await redis.expire(meta_key, ttl)
+
+
+async def query_cache(
+    tenant: str,
+    embedding: list[float],
+    threshold: float,
+    model_version: str,
+) -> str | None:
+    """Return a valid nearest cached response, or ``None`` for a cache miss."""
+    redis = get_redis_client()
+    if redis is None:
+        raise RuntimeError("Redis client has not been initialized")
+
+    embedding_bytes = struct.pack(f"{len(embedding)}f", *embedding)
+    results = await redis.ft(index_name(tenant)).search(
+        Query("*=>[KNN 1 @embedding $vec AS score]")
+        .sort_by("score")
+        .return_fields("score", "__key")
+        .dialect(2),
+        query_params={"vec": embedding_bytes},
+    )
+
+    if not results.docs:
+        return None
+
+    doc = results.docs[0]
+    similarity = 1 - float(doc.score)
+    if similarity >= threshold:
+        meta = await redis.hgetall(meta_key_for_vec_key(doc.id))
+        if meta.get("model_version") == model_version:
+            return meta.get("response")
+
+    return None
