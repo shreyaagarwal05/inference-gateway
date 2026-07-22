@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI
 
 from .api.admin_routes import router as admin_router
+from .api.chat_routes import router as chat_router
 from .breaker.lua_scripts import initialize_lua_scripts
 from .breaker.redis_client import (
     close_redis,
@@ -45,3 +46,4 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Multi-Tenant AI Inference Gateway", lifespan=lifespan)
 app.include_router(admin_router)
+app.include_router(chat_router)

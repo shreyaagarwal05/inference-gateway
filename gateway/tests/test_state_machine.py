@@ -14,7 +14,7 @@ DEPENDENCY_IMPORT_ERROR: ModuleNotFoundError | None = None
 try:
     from redis.exceptions import RedisError
 
-    from app.api.admin_routes import reset_breaker, router
+    from app.api.admin_routes import inspect_breaker, reset_breaker, router
     from app.breaker.lua_scripts import (
         initialize_lua_scripts,
         record_failure,
@@ -28,7 +28,7 @@ try:
         initialize_redis,
         state_key,
     )
-    from app.breaker.state_machine import decide_breaker_path
+    from app.breaker.state_machine import decide_breaker_path, get_breaker_status
 except ModuleNotFoundError as exc:
     DEPENDENCY_IMPORT_ERROR = exc
 
@@ -185,5 +185,30 @@ class StateMachineTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(await self.redis.get(failures_key(tenant)))
             self.assertIsNone(await self.redis.get(cooldown_key(tenant)))
             self.assertIsNone(await self.redis.get(half_open_claim_key(tenant)))
+        finally:
+            await self._clear_breaker_keys(tenant)
+
+    async def test_breaker_inspection_reports_redis_state(self) -> None:
+        tenant = self._tenant("inspect")
+        await self._clear_breaker_keys(tenant)
+
+        try:
+            route = next(
+                route for route in router.routes if route.path == "/admin/{tenant}/breaker"
+            )
+            self.assertIn("GET", route.methods)
+
+            await self.redis.set(state_key(tenant), "open")
+            await self.redis.set(failures_key(tenant), "3")
+            await self.redis.set(cooldown_key(tenant), time.time() + 30)
+
+            direct_status = await get_breaker_status(tenant)
+            route_status = await inspect_breaker(tenant)
+            self.assertEqual(route_status, direct_status)
+            self.assertEqual(tenant, route_status["tenant"])
+            self.assertEqual("open", route_status["state"])
+            self.assertEqual(3, route_status["failure_count"])
+            self.assertIsInstance(route_status["cooldown_remaining_seconds"], int)
+            self.assertGreater(route_status["cooldown_remaining_seconds"], 0)
         finally:
             await self._clear_breaker_keys(tenant)

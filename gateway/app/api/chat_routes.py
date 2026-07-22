@@ -19,7 +19,7 @@ class ChatRequest(BaseModel):
     prompt: str
 
 
-@router.post("/v1/chat")
+@router.post("/v1/chat", response_model=None)
 async def create_chat(
     request: ChatRequest,
     tenant: str | None = Header(default=None, alias="X-Tenant-ID"),

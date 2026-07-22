@@ -36,7 +36,11 @@ class ChatRouteTests(unittest.TestCase):
             self.client.close()
 
     def test_chat_request_delegates_to_gateway_service(self) -> None:
-        service_result = {"response": "A cached answer", "cache_hit": True}
+        service_result = {
+            "response": "A cached answer",
+            "cache_hit": True,
+            "similarity_score": 0.99,
+        }
         service = AsyncMock(return_value=service_result)
 
         with patch.object(chat_routes, "process_chat_request", service):

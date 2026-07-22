@@ -31,6 +31,7 @@ try:
     from app.cache.vector_store import (
         create_tenant_index,
         query_cache,
+        query_cache_with_similarity,
         write_cache_entry,
     )
 except ModuleNotFoundError as exc:
@@ -98,6 +99,28 @@ class CacheVectorStoreTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual("Semantic caching reuses responses for similar prompts.", result)
 
+    async def test_cache_hit_includes_cosine_similarity_for_api_envelope(self) -> None:
+        await write_cache_entry(
+            self.tenant_a,
+            prompt="What is semantic caching?",
+            response="Semantic caching reuses responses for similar prompts.",
+            embedding=_embedding(),
+            model_version="gpt-4",
+            ttl=60,
+        )
+
+        result = await query_cache_with_similarity(
+            self.tenant_a,
+            _embedding(),
+            threshold=0.95,
+            model_version="gpt-4",
+        )
+
+        self.assertIsNotNone(result)
+        response, similarity = result
+        self.assertEqual("Semantic caching reuses responses for similar prompts.", response)
+        self.assertAlmostEqual(1.0, similarity)
+
     async def test_tenant_indexes_are_structurally_isolated(self) -> None:
         await write_cache_entry(
             self.tenant_a,
@@ -158,6 +181,9 @@ class EmbeddingServiceTests(unittest.IsolatedAsyncioTestCase):
         original_model = embedding_service._model
         original_executor = embedding_service._executor
         test_executor = ThreadPoolExecutor(max_workers=4)
+        loop = asyncio.get_running_loop()
+        original_debug = loop.get_debug()
+        loop.set_debug(False)
         embedding_service._model = _SlowEmbeddingModel()
         embedding_service._executor = test_executor
 
@@ -177,3 +203,4 @@ class EmbeddingServiceTests(unittest.IsolatedAsyncioTestCase):
             embedding_service._model = original_model
             embedding_service._executor = original_executor
             test_executor.shutdown(wait=True)
+            loop.set_debug(original_debug)
