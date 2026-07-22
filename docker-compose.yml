@@ -20,6 +20,8 @@ services:
       - "${GATEWAY_PORT:-8000}:8000"
     environment:
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_BASE_URL: "${OPENAI_BASE_URL:-https://api.openai.com/v1}"
+      OPENAI_MODEL: "${OPENAI_MODEL:-}"
       REDIS_URL: "redis://redis-stack:6379"
       TENANTS_CONFIG_PATH: "/app/config/tenants.yaml"
       GATEWAY_PORT: "8000"

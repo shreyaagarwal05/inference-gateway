@@ -91,6 +91,17 @@ async def query_cache(
     model_version: str,
 ) -> str | None:
     """Return a valid nearest cached response, or ``None`` for a cache miss."""
+    entry = await query_cache_with_similarity(tenant, embedding, threshold, model_version)
+    return entry[0] if entry is not None else None
+
+
+async def query_cache_with_similarity(
+    tenant: str,
+    embedding: list[float],
+    threshold: float,
+    model_version: str,
+) -> tuple[str, float] | None:
+    """Return a valid cached response and its cosine similarity."""
     redis = get_redis_client()
     if redis is None:
         raise RuntimeError("Redis client has not been initialized")
@@ -112,6 +123,8 @@ async def query_cache(
     if similarity >= threshold:
         meta = await redis.hgetall(meta_key_for_vec_key(doc.id))
         if meta.get("model_version") == model_version:
-            return meta.get("response")
+            response = meta.get("response")
+            if response is not None:
+                return response, similarity
 
     return None

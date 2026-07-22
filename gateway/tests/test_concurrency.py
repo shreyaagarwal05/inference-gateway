@@ -38,23 +38,32 @@ TEST_REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 HTTP_CONCURRENCY_TESTS_ENABLED = os.getenv("RUN_HTTP_CONCURRENCY_TESTS") == "1"
 GATEWAY_BASE_URL = os.getenv("GATEWAY_BASE_URL", "http://localhost:8000").rstrip("/")
 HTTP_TEST_TENANT = os.getenv("HTTP_TEST_TENANT", "tenant_a")
+GATEWAY_REPLICA_URLS = tuple(
+    url.strip().rstrip("/")
+    for url in os.getenv("GATEWAY_REPLICA_URLS", "").split(",")
+    if url.strip()
+)
 
 
-def _http_request(method: str, path: str, body: dict[str, str] | None = None) -> tuple[int, str]:
+def _http_request_at(base_url: str, method: str, path: str, body: dict[str, str] | None = None) -> tuple[int, str]:
     """Perform one real HTTP request without introducing a test-only client."""
     data = json.dumps(body).encode("utf-8") if body is not None else None
     headers = {"Content-Type": "application/json"} if data is not None else {}
     if path == "/v1/chat":
         headers["X-Tenant-ID"] = HTTP_TEST_TENANT
 
-    request = Request(f"{GATEWAY_BASE_URL}{path}", data=data, headers=headers, method=method)
+    request = Request(f"{base_url}{path}", data=data, headers=headers, method=method)
     try:
         with urlopen(request, timeout=15) as response:
             return response.status, response.read().decode("utf-8")
     except HTTPError as exc:
         return exc.code, exc.read().decode("utf-8")
     except URLError as exc:
-        raise RuntimeError(f"Gateway is unavailable at {GATEWAY_BASE_URL}: {exc}") from exc
+        raise RuntimeError(f"Gateway is unavailable at {base_url}: {exc}") from exc
+
+
+def _http_request(method: str, path: str, body: dict[str, str] | None = None) -> tuple[int, str]:
+    return _http_request_at(GATEWAY_BASE_URL, method, path, body)
 
 
 def _metric_value(
@@ -222,5 +231,37 @@ class ConcurrencyTests(unittest.IsolatedAsyncioTestCase):
                 )
                 - rejections_before,
             )
+        finally:
+            await self._clear_breaker_keys(HTTP_TEST_TENANT)
+
+    async def test_breaker_state_is_shared_across_two_http_replicas(self) -> None:
+        """Trip through replica one and observe the state through replica two."""
+        if not HTTP_CONCURRENCY_TESTS_ENABLED:
+            self.skipTest("Set RUN_HTTP_CONCURRENCY_TESTS=1 to run real HTTP traffic")
+        if len(GATEWAY_REPLICA_URLS) < 2:
+            self.skipTest("Set GATEWAY_REPLICA_URLS=http://replica1,http://replica2")
+
+        await self._clear_breaker_keys(HTTP_TEST_TENANT)
+        try:
+            # The opt-in environment is expected to use an unavailable upstream
+            # key, so five cache misses deterministically trip the configured
+            # threshold without contacting a real paid upstream.
+            for index in range(5):
+                await asyncio.to_thread(
+                    _http_request_at,
+                    GATEWAY_REPLICA_URLS[0],
+                    "POST",
+                    "/v1/chat",
+                    {"prompt": f"phase-5-replica-trip-{uuid4().hex}-{index}"},
+                )
+
+            observed = await asyncio.to_thread(
+                _http_request_at,
+                GATEWAY_REPLICA_URLS[1],
+                "GET",
+                f"/admin/{HTTP_TEST_TENANT}/breaker",
+            )
+            self.assertEqual(200, observed[0])
+            self.assertEqual("open", json.loads(observed[1])["state"])
         finally:
             await self._clear_breaker_keys(HTTP_TEST_TENANT)

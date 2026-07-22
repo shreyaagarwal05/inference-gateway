@@ -1,6 +1,8 @@
 """Administrative and infrastructure endpoints."""
 
 from fastapi import APIRouter, HTTPException
+from fastapi import Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from ..breaker.redis_client import (
     cooldown_key,
@@ -10,8 +12,20 @@ from ..breaker.redis_client import (
     redis_is_connected,
     state_key,
 )
+from ..breaker.state_machine import get_breaker_status
+from ..services.metrics import set_circuit_breaker_state
 
 router = APIRouter()
+
+@router.get("/metrics")
+async def metrics() -> Response:
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+@router.get("/admin/{tenant}/breaker")
+async def inspect_breaker(tenant: str) -> dict[str, str | int | None]:
+    if get_redis_client() is None:
+        raise HTTPException(503, detail="Redis has not been initialized")
+    return await get_breaker_status(tenant)
 
 
 @router.get("/health")
@@ -34,6 +48,7 @@ async def reset_breaker(tenant: str) -> dict[str, str | int | None]:
         half_open_claim_key(tenant),
     )
     await redis.set(state_key(tenant), "closed")
+    set_circuit_breaker_state(tenant, "closed")
 
     return {
         "tenant": tenant,

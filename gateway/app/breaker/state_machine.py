@@ -7,10 +7,13 @@ from typing import Literal
 
 from .redis_client import (
     cooldown_key,
+    failures_key,
     get_redis_client,
     half_open_claim_key,
     state_key,
 )
+from math import ceil
+from ..services.metrics import set_circuit_breaker_state
 
 BreakerPath = Literal["B", "C", "D"]
 HALF_OPEN_CLAIM_TTL_SECONDS = 5
@@ -34,6 +37,14 @@ async def try_claim_half_open_test(tenant: str) -> bool:
     )
     return bool(result)
 
+async def get_breaker_status(tenant: str) -> dict[str, str | int | None]:
+    redis = _require_redis()
+    state, failures, cooldown = await redis.mget([state_key(tenant), failures_key(tenant), cooldown_key(tenant)])
+    state = state or "closed"
+    set_circuit_breaker_state(tenant, state)
+    remaining = max(0, ceil(float(cooldown) - time.time())) if cooldown else None
+    return {"tenant": tenant, "state": state, "failure_count": int(failures or 0), "cooldown_remaining_seconds": remaining}
+
 
 async def decide_breaker_path(tenant: str) -> BreakerPath:
     """Return the cache-miss breaker path: B=forward, C=reject, D=test."""
@@ -41,14 +52,17 @@ async def decide_breaker_path(tenant: str) -> BreakerPath:
     state = await redis.get(state_key(tenant))
 
     if state is None or state == "closed":
+        set_circuit_breaker_state(tenant, "closed")
         return "B"
 
     if state == "half_open":
+        set_circuit_breaker_state(tenant, "half_open")
         return "D" if await try_claim_half_open_test(tenant) else "C"
 
     if state == "open":
         cooldown_until = await redis.get(cooldown_key(tenant))
         if cooldown_until is not None and float(cooldown_until) > time.time():
+            set_circuit_breaker_state(tenant, "open")
             return "C"
 
         # Claim before writing half_open.  If the state write happened first,
@@ -58,6 +72,7 @@ async def decide_breaker_path(tenant: str) -> BreakerPath:
             return "C"
 
         await redis.set(state_key(tenant), "half_open")
+        set_circuit_breaker_state(tenant, "half_open")
         return "D"
 
     raise RuntimeError(f"Unexpected breaker state for tenant {tenant!r}: {state!r}")

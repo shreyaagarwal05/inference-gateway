@@ -10,6 +10,8 @@ class Settings(BaseSettings):
 
     redis_url: str = "redis://redis-stack:6379"
     openai_api_key: str | None = None
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_model: str | None = None
     tenants_config_path: str = "/app/config/tenants.yaml"
     gateway_port: int = 8000
     embedding_model_name: str = "all-MiniLM-L6-v2"
