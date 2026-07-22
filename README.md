@@ -31,7 +31,14 @@ FastAPI gateway with tenant-isolated semantic caching, a Redis-backed circuit br
    OPENAI_MODEL=
    ```
 
-   For another OpenAI-compatible provider, set both values to that provider's base URL and a model available to the account.
+   For another OpenAI-compatible provider, set both values to that provider's base URL and a model available to the account. For example, the validated local Groq configuration uses:
+
+   ```dotenv
+   OPENAI_BASE_URL=https://api.groq.com/openai/v1
+   OPENAI_MODEL=llama-3.1-8b-instant
+   ```
+
+   The gateway passes both settings through Docker Compose; the model must exist in the provider's `/models` response.
 
 3. Start the complete stack:
 
@@ -50,6 +57,8 @@ FastAPI gateway with tenant-isolated semantic caching, a Redis-backed circuit br
    ```json
    {"status":"ok","redis_connected":true}
    ```
+
+   In PowerShell, use `Invoke-RestMethod http://localhost:8000/health` instead. `Invoke-RestMethod` is not a Bash command.
 
 ## Service URLs
 
@@ -107,7 +116,7 @@ The following timings were captured from the running Docker gateway during the P
 | Health endpoint smoke check | 266.87 ms |
 | Breaker inspection endpoint smoke check | 141.31 ms |
 
-The first failure includes one-time model/startup overhead. These are measured local observations, not performance guarantees. Cache-hit and successful upstream-miss numbers should be recorded after running the demo with a reachable provider and then appended here.
+The first failure includes one-time model/startup overhead. These are measured local observations, not performance guarantees. Cache-hit and successful upstream-miss numbers should be recorded after running the demo with a reachable provider and then appended here. Never paste the API key into this guide or commit `.env`.
 
 Stop the stack with:
 
