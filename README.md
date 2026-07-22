@@ -96,9 +96,21 @@ curl -X POST http://localhost:8000/admin/tenant_a/breaker/reset
 7. Confirm the breaker becomes `open`, then observe subsequent requests return `503` with `circuit_open`.
 8. Inspect and reset the breaker through the admin endpoints, then restore the valid key.
 
+## Measured local runtime evidence
+
+The following timings were captured from the running Docker gateway during the Phase 7 demo check (PowerShell `Measure-Command`, localhost, July 2026):
+
+| Scenario | Observed latency |
+| --- | ---: |
+| Five forced upstream-failure requests | 3317.68 ms, 276.75 ms, 163.49 ms, 289.11 ms, 223.30 ms |
+| Breaker-open rejection after the threshold | 35.48 ms |
+| Health endpoint smoke check | 266.87 ms |
+| Breaker inspection endpoint smoke check | 141.31 ms |
+
+The first failure includes one-time model/startup overhead. These are measured local observations, not performance guarantees. Cache-hit and successful upstream-miss numbers should be recorded after running the demo with a reachable provider and then appended here.
+
 Stop the stack with:
 
 ```bash
 docker compose down
 ```
-
