@@ -51,7 +51,13 @@ async def decide_breaker_path(tenant: str) -> BreakerPath:
         if cooldown_until is not None and float(cooldown_until) > time.time():
             return "C"
 
+        # Claim before writing half_open.  If the state write happened first,
+        # a stale concurrent reader could overwrite a later successful reset
+        # back to half_open and start a second test request.
+        if not await try_claim_half_open_test(tenant):
+            return "C"
+
         await redis.set(state_key(tenant), "half_open")
-        return "D" if await try_claim_half_open_test(tenant) else "C"
+        return "D"
 
     raise RuntimeError(f"Unexpected breaker state for tenant {tenant!r}: {state!r}")
